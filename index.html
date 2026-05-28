@@ -575,12 +575,6 @@
 document.getElementById('form-add-book').onsubmit = async (e) => {
     e.preventDefault();
 
-    const btn = e.target.querySelector('button');
-    const fileInput = document.getElementById('capa-file-input');
-    const file = fileInput.files[0];
-
-    if (!file) return showToast("Selecione uma imagem para a capa!", "error");
-
     btn.innerText = "ENVIANDO IMAGEM...";
     btn.disabled = true;
 
