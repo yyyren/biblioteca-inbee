@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InBee Library - Hub Acadêmico Integral</title>
+    
+    <!-- Dependências -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
+
+    <style>
+        :root { --navy: #001736; --red: #C62828; --bg: #F5F7FA; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg); color: var(--navy); overflow-x: hidden; }
+        
+        .sidebar-active { background: var(--red) !important; color: white !important; box-shadow: 0 4px 15px rgba(198, 40, 40, 0.4); }
+        .sidebar-item:hover:not(.sidebar-active) { background: rgba(255, 255, 255, 0.05); color: white; transform: translateX(5px); }
+        .page-section { display: none; animation: fadeIn 0.4s ease-out; }
+        .active-section { display: block !important; }
+        .glass-card { background: white; border: 1px solid #E5E7EB; border-radius: 1.5rem; transition: all 0.3s ease; }
+        .book-card:hover { transform: translateY(-8px); border-color: var(--navy); box-shadow: 0 15px 30px rgba(0,0,0,0.1); }
+        
+        .filter-btn { border: 1px solid #E5E7EB; color: var(--navy); background: white; transition: all 0.2s ease; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 24px; border-radius: 9999px; }
+        .filter-btn-active { background: var(--navy) !important; color: white !important; border-color: var(--navy) !important; }
+
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .toast { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        #notification-panel { display: none; position: absolute; top: 60px; right: 80px; width: 320px; z-index: 1000; }
+        .show-notif { display: block !important; animation: fadeIn 0.2s ease; }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        .profile-gradient { background: linear-gradient(135deg, #001736 0%, #003366 100%); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <div id="toast-container" class="flex flex-col gap-3"></div>
+
+    <!-- ==========================================
+         TELA DE LOGIN
+         ========================================== -->
+    <div id="auth-screen" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#001736]">
+        <div class="w-full max-w-[420px] p-10 bg-white rounded-[3rem] shadow-2xl border-t-8 border-[#C62828]">
+            <div class="text-center mb-10">
+                <span class="material-symbols-outlined text-7xl text-[#001736]">account_balance</span>
+                <h1 class="text-3xl font-black text-[#001736] mt-4 tracking-tighter uppercase">InBee <span class="text-[#C62828]">Library</span></h1>
+                <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-2">Acesso Unificado</p>
+            </div>
+            <form id="login-form" class="space-y-5">
+                <input type="text" id="login-id" required class="w-full rounded-2xl border-gray-100 p-4 bg-gray-50 text-center font-bold tracking-widest focus:ring-2 focus:ring-[#001736]" placeholder="ID / MATRÍCULA">
+                <input type="password" id="login-senha" required class="w-full rounded-2xl border-gray-100 p-4 bg-gray-50 text-center font-bold tracking-widest focus:ring-2 focus:ring-[#001736]" placeholder="SENHA">
+                <button type="submit" id="btn-login" class="w-full bg-[#001736] text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-[#C62828] transition-all uppercase text-xs tracking-widest">Entrar no Portal</button>
+            </form>
+            <p class="text-center text-[9px] text-gray-300 mt-10 font-bold uppercase italic tracking-tighter">Master Admin: admin | admin123</p>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         ESTRUTURA PRINCIPAL (SPA)
+         ========================================== -->
+    <div id="app-screen" class="hidden h-screen w-full flex overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-64 bg-[#001736] text-white flex flex-col flex-shrink-0 z-50 shadow-2xl">
+            <div class="p-8 border-b border-white/5 text-center">
+                <h2 class="text-2xl font-black tracking-tighter italic uppercase">InBee</h2>
+                <div id="user-role-badge" class="mt-2 px-3 py-1 bg-[#C62828] rounded-lg text-[9px] font-black uppercase tracking-widest inline-block border border-white/10">Perfil</div>
+            </div>
+            
+            <nav class="flex-1 px-4 mt-6 space-y-2 overflow-y-auto custom-scrollbar">
+                <button onclick="switchPage('catalog')" id="nav-catalog" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm transition-all text-gray-400 hover:text-white"><span class="material-symbols-outlined">explore</span> Catálogo</button>
+                <button onclick="switchPage('repository')" id="nav-repository" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm transition-all text-gray-400 hover:text-white"><span class="material-symbols-outlined">description</span> Repositório</button>
+                <button onclick="switchPage('club')" id="nav-club" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm transition-all text-gray-400 hover:text-white"><span class="material-symbols-outlined">groups</span> Clube do Livro</button>
+                <button onclick="switchPage('my-loans')" id="nav-my-loans" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm text-gray-400 transition-all hover:text-white"><span class="material-symbols-outlined">history_edu</span> Leituras</button>
+                <button onclick="switchPage('profile')" id="nav-profile" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm text-gray-400 transition-all hover:text-white"><span class="material-symbols-outlined">person</span> Meu Perfil</button>
+
+                <!-- BIOCO ADMINISTRATIVO -->
+                <div id="admin-only-sidebar" class="hidden pt-6 space-y-2 border-t border-white/5">
+                    <p class="px-4 text-[10px] font-black text-[#C62828] uppercase tracking-widest mb-2 italic">Administração</p>
+                    <button onclick="switchPage('dashboard')" id="nav-dashboard" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm text-gray-400 hover:text-white"><span class="material-symbols-outlined">dashboard</span> Dashboard</button>
+                    <button onclick="switchPage('manage-books')" id="nav-manage-books" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm text-gray-400 hover:text-white"><span class="material-symbols-outlined">edit_document</span> Gerir Acervo</button>
+                    <button onclick="switchPage('manage-loans')" id="nav-manage-loans" class="sidebar-item w-full flex items-center gap-3 p-4 rounded-xl font-semibold text-sm text-gray-400 hover:text-white"><span class="material-symbols-outlined">handshake</span> Empréstimos</button>
+                </div>
+            </nav>
+
+            <div class="p-6 border-t border-white/5"><button onclick="logout()" class="w-full py-4 rounded-xl text-[10px] font-bold uppercase text-gray-400 hover:text-white hover:bg-[#C62828] flex items-center justify-center gap-2 transition-all tracking-widest"><span class="material-symbols-outlined text-sm">power_settings_new</span> SAIR</button></div>
+        </aside>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="flex-1 overflow-y-auto custom-scrollbar bg-[#F5F7FA] relative flex flex-col">
+            
+            <!-- HEADER -->
+            <header class="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-10 sticky top-0 z-40 shrink-0">
+                <h2 id="page-title" class="font-bold text-[#001736] text-xl uppercase tracking-tighter">Início</h2>
+                
+                <div class="flex items-center gap-6">
+                    <div class="relative">
+                        <button onclick="toggleNotifications()" class="relative w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all border border-gray-100">
+                            <span class="material-symbols-outlined">notifications</span>
+                            <span id="notif-dot" class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white animate-ping"></span>
+                        </button>
+                        
+                        <!-- Painel Dropdown Notificações -->
+                        <div id="notification-panel" class="glass-card shadow-2xl p-4 border border-gray-200 bg-white">
+                            <h4 class="text-[10px] font-black uppercase text-[#001736] mb-3 border-b pb-2 flex justify-between items-center">Avisos Recentes</h4>
+                            <div id="notif-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="w-px h-8 bg-gray-200"></div>
+
+                    <!-- Perfil Widget -->
+                    <div class="flex items-center gap-4 cursor-pointer group" onclick="switchPage('profile')">
+                        <div class="text-right hidden sm:block">
+                            <p id="header-user-name" class="text-sm font-bold text-[#001736]">Usuário</p>
+                            <p id="header-user-role" class="text-[9px] font-black text-[#C62828] uppercase tracking-widest">Acesso</p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl overflow-hidden border-2 border-gray-100 bg-[#001736] flex items-center justify-center text-white font-bold text-xs" id="header-avatar-container">
+                            <img id="header-avatar" src="" class="w-full h-full object-cover hidden">
+                            <span id="header-initials">US</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-8 flex-1 space-y-12">
+                
+                <!-- PAINEL DASHBOARD (ADMIN) -->
+                <section id="page-dashboard" class="page-section space-y-8">
+                    <div class="glass-card p-8 profile-gradient text-white rounded-[2rem] shadow-xl">
+                        <h3 id="user-name-display" class="text-2xl font-black">Olá, Administrador</h3>
+                        <p class="text-white/70 text-xs mt-1">Aqui está o balanço em tempo real do ecossistema da biblioteca.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+                        <div class="glass-card p-6 border-l-4 border-blue-500 shadow-sm"><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Livros Cadastrados</p><p class="text-4xl font-black mt-2 text-[#001736]" id="stat-books">0</p></div>
+                        <div class="glass-card p-6 border-l-4 border-[#C62828] shadow-sm"><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Empréstimos Ativos</p><p class="text-4xl font-black mt-2 text-[#001736]" id="stat-loans">0</p></div>
+                        <div class="glass-card p-6 border-l-4 border-amber-500 shadow-sm"><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Devoluções Atrasadas</p><p class="text-4xl font-black mt-2 text-red-600" id="stat-late">0</p></div>
+                        <div class="glass-card p-6 border-l-4 border-purple-500 shadow-sm"><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Documentos Digitais</p><p class="text-4xl font-black mt-2 text-[#001736]" id="stat-repository">0</p></div>
+                    </div>
+                </section>
+
+                <!-- CATÁLOGO ACERVO (COM SOLICITAÇÃO) -->
+                <section id="page-catalog" class="page-section active-section space-y-8">
+                    <div class="max-w-4xl mx-auto text-center space-y-6">
+                        <h1 class="text-4xl md:text-5xl font-black text-[#001736] tracking-tight uppercase">Acervo Geral</h1>
+                        <div class="relative max-w-2xl mx-auto shadow-xl rounded-[2rem] overflow-hidden bg-white">
+                            <span class="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-gray-300">search</span>
+                            <input type="text" id="catalog-search" oninput="filterCatalog()" placeholder="Buscar obra, autor ou palavra-chave..." class="w-full pl-16 pr-8 py-5 border-none focus:ring-0 text-lg">
+                        </div>
+                        <div id="filter-container" class="flex flex-wrap justify-center gap-3">
+                            <button onclick="selectCategory('TODOS')" id="filter-TODOS" class="filter-btn filter-btn-active">Todos</button>
+                            <button onclick="selectCategory('DIREITO')" id="filter-DIREITO" class="filter-btn">Direito</button>
+                            <button onclick="selectCategory('TECNOLOGIA')" id="filter-TECNOLOGIA" class="filter-btn">Tecnologia</button>
+                            <button onclick="selectCategory('SAUDE')" id="filter-SAUDE" class="filter-btn">Saúde</button>
+                            <button onclick="selectCategory('NEGOCIOS')" id="filter-NEGOCIOS" class="filter-btn">Negócios</button>
+                        </div>
+                    </div>
+                    <div id="catalog-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6"></div>
+                </section>
+
+                <!-- REPOSITÓRIO ACADÊMICO (PDFs) -->
+                <section id="page-repository" class="page-section space-y-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                        <div class="lg:col-span-4 bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 h-fit admin-only-block hidden">
+                            <h3 class="font-bold text-xl mb-6 uppercase text-[#001736] flex items-center gap-2"><span class="material-symbols-outlined">upload_file</span> Publicar Artigo / PDF</h3>
+                            <form id="form-repository" class="space-y-4">
+                                <input type="text" name="titulo" placeholder="Título do Trabalho" required class="w-full rounded-xl border-gray-200 p-4 text-sm font-medium">
+                                <input type="text" name="autor" placeholder="Autor / Orientador" required class="w-full rounded-xl border-gray-200 p-4 text-sm font-medium">
+                                <div class="relative border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center cursor-pointer bg-gray-50 hover:border-[#C62828] transition-all">
+                                    <input type="file" id="pdf-file-input" accept="application/pdf" required class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                                    <div id="pdf-placeholder"><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Escolher Arquivo PDF</p></div>
+                                    <div id="pdf-selected-name" class="hidden text-[#C62828] font-bold text-xs truncate italic"></div>
+                                </div>
+                                <button type="submit" id="btn-save-repo" class="w-full bg-[#001736] text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-[#C62828] transition-all">Upload para o Repositório</button>
+                            </form>
+                        </div>
+                        <div id="repository-grid" class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+                    </div>
+                </section>
+
+                <!-- CLUBE DO LIVRO P2P -->
+                <section id="page-club" class="page-section space-y-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                        <div class="lg:col-span-4 bg-white p-8 rounded-3xl shadow-xl h-fit border border-gray-100">
+                            <h3 class="font-bold text-lg mb-6 uppercase text-[#C62828] flex items-center gap-2 tracking-tighter"><span class="material-symbols-outlined">add_circle</span> Anunciar Desapego</h3>
+                            <form id="form-club-post" class="space-y-4">
+                                <input type="text" name="titulo" placeholder="Nome do Livro" required class="w-full rounded-xl border-gray-200 p-4 text-sm">
+                                <input type="text" name="autor" placeholder="Autor da Obra" required class="w-full rounded-xl border-gray-200 p-4 text-sm">
+                                <select name="tipo" class="w-full rounded-xl border-gray-200 p-4 text-xs font-bold text-[#001736]">
+                                    <option value="Empréstimo">Disponibilizar para Empréstimo</option>
+                                    <option value="Doação">Disponibilizar para Doação</option>
+                                </select>
+                                <button type="submit" class="w-full bg-[#001736] text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-[#C62828] transition-all">Publicar no Mural</button>
+                            </form>
+                        </div>
+                        <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="club-grid-display"></div>
+                    </div>
+                </section>
+
+                <!-- LEITURAS / EMPRÉSTIMOS DO ALUNO -->
+                <section id="page-my-loans" class="page-section space-y-6">
+                    <h3 class="text-xl font-bold uppercase tracking-tight text-[#001736]">Minhas Alocações Ativas</h3>
+                    <div id="student-loans-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+                </section>
+
+                <!-- PERFIL DO USUÁRIO -->
+                <section id="page-profile" class="page-section space-y-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        <div class="lg:col-span-4 space-y-6">
+                            <div class="glass-card p-8 text-center relative overflow-hidden">
+                                <div class="profile-gradient absolute top-0 left-0 w-full h-24"></div>
+                                <div class="relative z-10">
+                                    <div class="w-32 h-32 mx-auto rounded-[2rem] overflow-hidden border-4 border-white shadow-xl mt-4 group relative bg-[#001736] flex items-center justify-center text-4xl text-white font-black">
+                                        <img id="profile-page-avatar" src="" class="w-full h-full object-cover hidden">
+                                        <span id="profile-page-initials">US</span>
+                                        <label class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-all">
+                                            <span class="material-symbols-outlined text-white">photo_camera</span>
+                                            <input type="file" id="avatar-upload" class="hidden" accept="image/*">
+                                        </label>
+                                    </div>
+                                    <h3 id="profile-name" class="text-xl font-black mt-6 text-[#001736]">Nome Completo</h3>
+                                    <p id="profile-role" class="text-[10px] font-black text-[#C62828] uppercase tracking-[0.3em] mb-4">Cargo</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-8 space-y-8">
+                            <div class="glass-card p-10 h-full border border-gray-100">
+                                <div class="flex justify-between items-center mb-8">
+                                    <h3 class="text-xl font-bold uppercase italic tracking-tighter">Dados de Cadastro</h3>
+                                    <button onclick="saveProfile()" class="px-6 py-2 bg-[#001736] text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#C62828] transition-all">Salvar Alterações</button>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-black text-gray-400 uppercase">Curso / Especialidade</label>
+                                        <input type="text" id="edit-curso" class="w-full rounded-2xl border-gray-200 p-4 text-sm font-bold">
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-black text-gray-400 uppercase">Telefone de Contato</label>
+                                        <input type="text" id="edit-phone" class="w-full rounded-2xl border-gray-200 p-4 text-sm font-bold">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GERIR ACERVO / FORMULÁRIO DE LIVROS (ADMIN) -->
+                <section id="page-manage-books" class="page-section space-y-8">
+                    <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                        <h3 class="text-lg font-bold uppercase mb-6 text-[#001736]">Catalogar Novo Livro no Sistema</h3>
+                        <form id="form-add-book" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <input type="text" name="titulo" placeholder="Título do Livro" required class="rounded-xl border-gray-200 text-sm p-4">
+                            <input type="text" name="autor" placeholder="Autor" required class="rounded-xl border-gray-200 text-sm p-4">
+                            <select name="categoria" required class="rounded-xl border-gray-200 text-xs font-bold text-[#001736] p-4">
+                                <option value="DIREITO">DIREITO</option>
+                                <option value="TECNOLOGIA">TECNOLOGIA</option>
+                                <option value="SAUDE">SAUDE</option>
+                                <option value="NEGOCIOS">NEGOCIOS</option>
+                            </select>
+                            <input type="number" name="quantidade" placeholder="Qtd Exemplares" required min="1" class="rounded-xl border-gray-200 text-sm p-4">
+                            <input type="text" name="capa_url" placeholder="URL da Imagem da Capa (Opcional)" class="md:col-span-3 rounded-xl border-gray-200 text-sm p-4">
+                            <button type="submit" class="bg-[#001736] text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#C62828] transition-all p-4">Salvar no Acervo</button>
+                        </form>
+                    </div>
+                    <div class="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 text-[9px] font-black uppercase text-gray-400 tracking-widest">
+                                <tr><th class="p-6">Obra Literária</th><th class="p-6">Categoria</th><th class="p-6 text-center">Disponível</th><th class="p-6 text-right">Ação</th></tr>
+                            </thead>
+                            <tbody id="admin-table-books" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- GERIR EMPRÉSTIMOS / DEVOLUÇÕES (ADMIN) -->
+                <section id="page-manage-loans" class="page-section space-y-8">
+                    <div class="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 text-[9px] font-black uppercase text-gray-400 tracking-widest">
+                                <tr><th class="p-6">Leitor</th><th class="p-6">Livro</th><th class="p-6">Data Limite</th><th class="p-6">Status</th><th class="p-6 text-right">Ação</th></tr>
+                            </thead>
+                            <tbody id="admin-table-loans" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO DE EMPRÉSTIMO -->
+    <div id="loan-modal" class="hidden fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+            <h3 class="text-xl font-black text-[#001736] uppercase tracking-tight">Confirmar Retirada</h3>
+            <div class="p-4 bg-gray-50 rounded-2xl">
+                <p class="text-[10px] font-bold text-gray-400 uppercase">Obra Selecionada</p>
+                <p id="modal-book-title" class="font-bold text-sm text-[#001736] mt-1"></p>
+                <p id="modal-book-author" class="text-xs text-gray-400 italic"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-center">
+                <div class="p-3 bg-blue-50 rounded-xl"><p class="text-[9px] font-bold text-blue-600 uppercase">Prazo Padrão</p><p class="font-black text-sm text-[#001736] mt-1">7 Dias</p></div>
+                <div class="p-3 bg-red-50 rounded-xl"><p class="text-[9px] font-bold text-red-600 uppercase">Custo de Alocação</p><p class="font-black text-sm text-[#001736] mt-1">Gratuito</p></div>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="closeLoanModal()" class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-2xl text-[10px] font-black uppercase text-gray-500 transition-all">Desistir</button>
+                <button id="btn-confirm-loan" class="flex-1 py-4 bg-[#001736] text-white hover:bg-[#C62828] rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CORE SCRIPT -->
+    <script>
+        const SB_URL = 'https://zdbuajsgrvipwxwhodky.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnVhanNncnZpcHd4d2hvZGt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1OTY3NjMsImV4cCI6MjA5NTE3Mjc2M30.MK1FA7KSYhpNwpNtUNmeLctIWHOE0OdQBMIBx11YgMA';
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        window.store = { user: null, books: [], loans: [], repository: [], notifications: [], selectedBookId: null, clubBooks: [] };
+        window.currentCategory = 'TODOS';
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const bg = type === 'success' ? 'bg-[#001736]' : 'bg-[#C62828]';
+            const toast = document.createElement('div');
+            toast.className = `toast ${bg} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10`;
+            toast.innerHTML = `<span class="material-symbols-outlined text-sm">info</span><span class="text-[10px] font-black uppercase tracking-widest">${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function normalize(text) { return text ? text.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() : ""; }
+
+        // AUTH CONTROL
+        document.getElementById('login-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('login-id').value.trim();
+            const senha = document.getElementById('login-senha').value.trim();
+            const btn = document.getElementById('btn-login');
+            
+            if((id === 'B0001' || id === 'admin') && senha === 'admin123') {
+                store.user = { id: 'master', nome: "Admin Institucional", role: "admin", curso: "Geral", telefone: "0000" };
+                initApp(); return;
+            }
+
+            btn.disabled = true; btn.innerText = "AUTENTICANDO...";
+            try {
+                const { data, error } = await _supabase.from('profiles').select('*').eq('id', id).eq('senha', senha).maybeSingle();
+                if (error || !data) return showToast("Credenciais inválidas.", "error");
+                store.user = data; localStorage.setItem('user', JSON.stringify(data)); initApp();
+            } catch(e) { showToast("Falha de comunicação", "error"); }
+            finally { btn.disabled = false; btn.innerText = "ENTRAR NO PORTAL"; }
+        };
+
+        function initApp() {
+            if(!store.user) {
+                const s = localStorage.getItem('user');
+                if(s) store.user = JSON.parse(s); else return;
+            }
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('app-screen').classList.remove('hidden');
+            document.getElementById('app-screen').style.display = 'flex';
+            
+            document.getElementById('user-role-badge').innerText = store.user.role;
+            document.getElementById('header-user-role').innerText = store.user.role;
+            document.getElementById('header-user-name').innerText = store.user.nome;
+            document.getElementById('user-name-display').innerText = "Olá, " + store.user.nome;
+            
+            renderProfileData();
+
+            if(store.user.role === 'admin') {
+                document.getElementById('admin-only-sidebar')?.classList.remove('hidden');
+                document.querySelectorAll('.admin-only-block').forEach(el => el.classList.remove('hidden'));
+            }
+            switchPage(store.user.role === 'admin' ? 'dashboard' : 'catalog');
+            refreshAllData();
+        }
+
+        function switchPage(id) {
+            document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active-section'));
+            const target = document.getElementById(`page-${id}`); if (target) target.classList.add('active-section');
+            document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('sidebar-active', 'text-white'));
+            const btn = document.getElementById(`nav-${id}`); if (btn) btn.classList.add('sidebar-active', 'text-white');
+            document.getElementById('page-title').innerText = id.replace('manage-', 'GERENCIAR ').toUpperCase();
+            if(id === 'club') renderClub();
+        }
+
+        async function refreshAllData() {
+            try {
+                const [b, l, r] = await Promise.all([
+                    _supabase.from('livros').select('*').order('titulo'),
+                    _supabase.from('emprestimos').select('*, profiles(nome), livros(titulo, autor)'),
+                    _supabase.from('repositorio').select('*')
+                ]);
+                store.books = b.data || [];
+                store.loans = l.data || [];
+                store.repository = r.data || [];
+                
+                generateAutoNotifications();
+                renderUI();
+            } catch (err) { console.error(err); }
+        }
+
+        // AUTO NOTIFICAÇÕES (AVISOS DE VENCIMENTO)
+        function generateAutoNotifications() {
+            store.notifications = [];
+            const hoje = new Date();
+            store.loans.forEach(l => {
+                if(l.usuario_id === store.user.id && l.status === 'ATIVO') {
+                    const venci = new Date(l.data_devolucao);
+                    const diff = Math.ceil((venci - hoje) / (1000 * 60 * 60 * 24));
+                    if(diff <= 2 && diff >= 0) store.notifications.push({ text: `Seu livro "${l.livros?.titulo || 'Livro'}" vence em ${diff} dia(s).`, type: 'warning' });
+                    if(diff < 0) store.notifications.push({ text: `ATRASADO: Devolva o livro "${l.livros?.titulo || 'Livro'}" imediatamente.`, type: 'urgent' });
+                }
+            });
+            renderNotifications();
+        }
+
+        function toggleNotifications() { document.getElementById('notification-panel').classList.toggle('show-notif'); }
+
+        function renderNotifications() {
+            const list = document.getElementById('notif-list');
+            const dot = document.getElementById('notif-dot');
+            if(store.notifications.length > 0) {
+                dot.classList.remove('hidden');
+                list.innerHTML = store.notifications.map(n => `<div class="p-3 rounded-xl ${n.type === 'urgent' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-amber-50 text-amber-700 border-amber-100'} border text-[10px] font-bold leading-tight flex items-center gap-2"><span class="material-symbols-outlined text-sm">error</span> ${n.text}</div>`).join('');
+            } else {
+                dot.classList.add('hidden');
+                list.innerHTML = `<p class="text-[10px] text-gray-400 italic text-center py-4">Nenhuma pendência ou aviso encontrado.</p>`;
+            }
+        }
+
+        // CATÁLOGO & MODAL DE EMPRÉSTIMO
+        function selectCategory(cat) {
+            window.currentCategory = cat;
+            document.querySelectorAll('#filter-container button').forEach(b => b.classList.remove('filter-btn-active'));
+            document.getElementById(`filter-${cat}`).classList.add('filter-btn-active');
+            filterCatalog();
+        }
+
+        function filterCatalog() {
+            const query = normalize(document.getElementById('catalog-search').value);
+            const grid = document.getElementById('catalog-grid');
+            if(!grid) return;
+
+            const filtered = store.books.filter(b => {
+                const matchText = normalize(b.titulo).includes(query) || normalize(b.autor).includes(query);
+                const matchCat = (window.currentCategory === 'TODOS') || (normalize(b.categoria) === window.currentCategory);
+                return matchText && matchCat;
+            });
+
+            const def = "https://images.unsplash.com/photo-1543004471-2406836eb8a4?q=80&w=200&auto=format&fit=crop";
+            grid.innerHTML = filtered.map(b => `
+                <div onclick="openLoanModal('${b.id}')" class="book-card p-4 rounded-3xl flex flex-col h-full bg-white border border-gray-100 cursor-pointer animate-in fade-in">
+                    <img src="${b.capa_url || def}" class="rounded-2xl aspect-[3/4] object-cover mb-4 shadow-sm">
+                    <h4 class="font-bold text-[11px] uppercase line-clamp-2 leading-tight text-[#001736]">${b.titulo}</h4>
+                    <p class="text-[9px] text-gray-400 mt-2 italic font-medium uppercase tracking-widest">${b.autor}</p>
+                    <div class="mt-auto pt-3 flex justify-between items-center text-[10px] font-bold">
+                        <span class="${b.quantidade > 0 ? 'text-emerald-600' : 'text-red-500'}">${b.quantidade > 0 ? b.quantidade + ' Disp.' : 'Esgotado'}</span>
+                    </div>
+                </div>`).join('');
+        }
+
+        function openLoanModal(bookId) {
+            if(store.user.id === 'master') return showToast("Admins não realizam locações diretas.", "error");
+            const book = store.books.find(b => b.id == bookId);
+            if(!book) return;
+            if(book.quantidade <= 0) return showToast("Este exemplar está indisponível no momento.", "error");
+
+            store.selectedBookId = bookId;
+            document.getElementById('modal-book-title').innerText = book.titulo;
+            document.getElementById('modal-book-author').innerText = book.autor;
+            document.getElementById('loan-modal').classList.remove('hidden');
+        }
+
+        function closeLoanModal() { document.getElementById('loan-modal').classList.add('hidden'); }
+
+        document.getElementById('btn-confirm-loan').onclick = async () => {
+            if(!store.selectedBookId) return;
+            const book = store.books.find(b => b.id == store.selectedBookId);
+            const dataDevolucao = new Date();
+            dataDevolucao.setDate(dataDevolucao.getDate() + 7);
+
+            try {
+                // Diminui um no estoque do livro
+                await _supabase.from('livros').update({ quantidade: book.quantidade - 1 }).eq('id', book.id);
+                // Registra o empréstimo
+                await _supabase.from('emprestimos').insert([{
+                    usuario_id: store.user.id,
+                    livro_id: book.id,
+                    data_devolucao: dataDevolucao.toISOString().split('T')[0],
+                    status: 'ATIVO'
+                }]);
+                showToast("Retirada registrada com sucesso!");
+                closeLoanModal();
+                refreshAllData();
+            } catch(e) { showToast("Não foi possível processar o empréstimo", "error"); }
+        };
+
+        // RENDERS GERAIS (PAINÉIS E TABELAS)
+        function renderUI() {
+            // Dashboard Stats
+            if(document.getElementById('stat-books')) document.getElementById('stat-books').innerText = store.books.length;
+            if(document.getElementById('stat-loans')) document.getElementById('stat-loans').innerText = store.loans.filter(l => l.status === 'ATIVO').length;
+            if(document.getElementById('stat-repository')) document.getElementById('stat-repository').innerText = store.repository.length;
+            if(document.getElementById('stat-late')) document.getElementById('stat-late').innerText = store.loans.filter(l => l.status === 'ATIVO' && new Date() > new Date(l.data_devolucao)).length;
+
+            filterCatalog();
+
+            // Painel Repositório PDF
+            const repoGrid = document.getElementById('repository-grid');
+            if(repoGrid) repoGrid.innerHTML = store.repository.map(doc => {
+                const finalUrl = `${SB_URL}/storage/v1/object/public/repositorio/${doc.pdf_url}`;
+                return `<div class="glass-card p-6 flex flex-col justify-between border-l-8 border-[#001736] bg-white shadow-sm">
+                    <div>
+                        <span class="material-symbols-outlined text-[#C62828] text-4xl">picture_as_pdf</span>
+                        <h4 class="font-bold text-sm mt-3 uppercase line-clamp-2 tracking-tight">${doc.titulo}</h4>
+                        <p class="text-[10px] text-gray-400 uppercase font-medium mt-1">${doc.autor}</p>
+                    </div>
+                    <a href="${finalUrl}" target="_blank" class="mt-6 w-full text-center bg-gray-100 text-[#001736] hover:bg-[#001736] hover:text-white py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Download PDF</a>
+                </div>`;
+            }).join('');
+
+            // Tabela Admin Acervo
+            const tbBooks = document.getElementById('admin-table-books');
+            if(tbBooks) tbBooks.innerHTML = store.books.map(b => `<tr class="hover:bg-gray-50"><td class="p-6 font-bold text-sm text-[#001736] uppercase">${b.titulo}<br><span class="text-xs text-gray-400 font-medium lowercase italic">por ${b.autor}</span></td><td class="p-6 text-xs font-black text-gray-400">${b.categoria}</td><td class="p-6 text-center font-black">${b.quantidade} unidades</td><td class="p-6 text-right"><button onclick="deleteBook('${b.id}')" class="text-red-600 font-bold uppercase text-[10px] tracking-widest">Remover</button></td></tr>`).join('');
+
+            // Tabela Admin Empréstimos (DEVOLUÇÃO)
+            const tbLoans = document.getElementById('admin-table-loans');
+            if(tbLoans) tbLoans.innerHTML = store.loans.map(l => {
+                const isLate = l.status === 'ATIVO' && new Date() > new Date(l.data_devolucao);
+                return `<tr class="hover:bg-gray-50">
+                    <td class="p-6 font-bold text-[#001736] text-xs">${l.profiles?.nome || 'Matrícula: ' + l.usuario_id}</td>
+                    <td class="p-6 text-xs font-medium text-gray-500">${l.livros?.titulo || 'Desconhecido'}</td>
+                    <td class="p-6 text-xs font-bold ${isLate ? 'text-red-600' : 'text-gray-400'}">${new Date(l.data_devolucao).toLocaleDateString()}</td>
+                    <td class="p-6"><span class="px-3 py-1 rounded-full text-[9px] font-black ${l.status === 'ATIVO' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${l.status}</span></td>
+                    <td class="p-6 text-right">
+                        ${l.status === 'ATIVO' ? `<button onclick="returnBook('${l.id}', '${l.livro_id}')" class="bg-[#001736] text-white px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-[#C62828] transition-all">Dar Baixa</button>` : '<span class="text-gray-300 italic text-xs">Concluído</span>'}
+                    </td>
+                </tr>`;
+            }).join('');
+
+            // Minhas Leituras (Aluno)
+            const myGrid = document.getElementById('student-loans-grid');
+            if(myGrid) {
+                const mine = store.loans.filter(l => l.usuario_id === store.user.id && l.status === 'ATIVO');
+                myGrid.innerHTML = mine.length > 0 ? mine.map(l => `
+                    <div class="glass-card p-6 border-l-8 border-[#C62828] bg-white flex flex-col justify-between shadow-sm">
+                        <div>
+                            <h4 class="font-bold text-sm uppercase text-[#001736]">${l.livros?.titulo || 'Livro'}</h4>
+                            <p class="text-[10px] text-gray-400 italic mt-1">por ${l.livros?.autor || 'Desconhecido'}</p>
+                        </div>
+                        <p class="text-[10px] text-red-600 mt-6 uppercase font-black tracking-widest">Devolução impreterível até: ${new Date(l.data_devolucao).toLocaleDateString()}</p>
+                    </div>`).join('') : `<p class="col-span-full text-gray-400 italic font-medium">Você não possui livros alocados no momento.</p>`;
+            }
+        }
+
+        // DAR BAIXA EM EMPRÉSTIMO (ADMIN)
+        async function returnBook(loanId, bookId) {
+            const book = store.books.find(b => b.id == bookId);
+            try {
+                if(book) { await _supabase.from('livros').update({ quantidade: book.quantidade + 1 }).eq('id', bookId); }
+                await _supabase.from('emprestimos').update({ status: 'DEVOLVIDO' }).eq('id', loanId);
+                showToast("Devolução registrada com sucesso!");
+                refreshAllData();
+            } catch(e) { showToast("Erro ao processar devolução", "error"); }
+        }
+
+        // INSERIR LIVROS NO ACERVO (ADMIN)
+        document.getElementById('form-add-book').onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const bookData = {
+                titulo: fd.get('titulo'),
+                autor: fd.get('autor'),
+                categoria: fd.get('categoria'),
+                quantidade: parseInt(fd.get('quantidade')),
+                capa_url: fd.get('capa_url') || null
+            };
+
+            try {
+                await _supabase.from('livros').insert([bookData]);
+                showToast("Nova obra catalogada com sucesso!");
+                e.target.reset();
+                refreshAllData();
+            } catch(err) { showToast("Erro ao inserir livro.", "error"); }
+        };
+
+        // REMOVER LIVRO DO SISTEMA (ADMIN)
+        async function deleteBook(id) {
+            if(!confirm("Remover permanentemente esta obra do acervo?")) return;
+            try { await _supabase.from('livros').delete().eq('id', id); refreshAllData(); showToast("Removido com sucesso!"); } catch(e){ showToast("Erro ao deletar", "error"); }
+        }
+
+        // CLUBE DO LIVRO (MURAL P2P LOCAL)
+        function renderClub() {
+            const grid = document.getElementById('club-grid-display');
+            if(!grid) return;
+            if(store.clubBooks.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-gray-400 text-center py-10 italic">Nenhum livro cadastrado no mural comunitário ainda.</p>`;
+                return;
+            }
+            grid.innerHTML = store.clubBooks.map(b => `
+                <div class="glass-card p-6 flex flex-col justify-between bg-white hover:shadow-xl transition-all border border-gray-100">
+                    <div>
+                        <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${b.tipo === 'Doação' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}">${b.tipo}</span>
+                        <h4 class="font-bold text-sm text-[#001736] mt-4 uppercase leading-tight">${b.titulo}</h4>
+                        <p class="text-[10px] text-gray-400 italic mt-1">${b.autor}</p>
+                        <p class="text-[9px] font-black text-[#001736] mt-4 uppercase tracking-widest border-t pt-2">Dono: ${b.dono}</p>
+                    </div>
+                    <button onclick="showToast('Solicitação enviada ao proprietário via e-mail corporativo!', 'success')" class="mt-6 py-3 bg-[#001736] text-white rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-[#C62828] transition-all">Garantir Item</button>
+                </div>`).join('');
+        }
+
+        document.getElementById('form-club-post').onsubmit = (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            store.clubBooks.unshift({ id: Date.now(), titulo: fd.get('titulo'), autor: fd.get('autor'), tipo: fd.get('tipo'), dono: store.user.nome });
+            e.target.reset();
+            showToast("Publicado com sucesso no Clube!");
+            renderClub();
+        };
+
+        // PERFIL E UPLOADS
+        function renderProfileData() {
+            const u = store.user;
+            document.getElementById('profile-name').innerText = u.nome;
+            document.getElementById('profile-role').innerText = u.role;
+            document.getElementById('edit-curso').value = u.curso || '';
+            document.getElementById('edit-phone').value = u.telefone || '';
+
+            const initials = u.nome.substring(0, 2).toUpperCase();
+            document.getElementById('header-initials').innerText = initials;
+            document.getElementById('profile-page-initials').innerText = initials;
+
+            if(u.avatar_url) {
+                document.getElementById('header-avatar').src = u.avatar_url;
+                document.getElementById('header-avatar').classList.remove('hidden');
+                document.getElementById('header-initials').classList.add('hidden');
+
+                document.getElementById('profile-page-avatar').src = u.avatar_url;
+                document.getElementById('profile-page-avatar').classList.remove('hidden');
+                document.getElementById('profile-page-initials').classList.add('hidden');
+            }
+        }
+
+        async function saveProfile() {
+            const dataToUpdate = { curso: document.getElementById('edit-curso').value, telefone: document.getElementById('edit-phone').value };
+            if (store.user.id !== 'master') {
+                await _supabase.from('profiles').update(dataToUpdate).eq('id', store.user.id);
+            }
+            Object.assign(store.user, dataToUpdate);
+            localStorage.setItem('user', JSON.stringify(store.user));
+            showToast("Informações salvas!");
+        }
+
+        document.getElementById('avatar-upload').onchange = async (e) => {
+            const file = e.target.files[0];
+            if(!file || store.user.id === 'master') return;
+            const fileName = `avatar_${store.user.id}_${Date.now()}`;
+            try {
+                await _supabase.storage.from('avatars').upload(fileName, file);
+                const { data } = _supabase.storage.from('avatars').getPublicUrl(fileName);
+                await _supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', store.user.id);
+                store.user.avatar_url = data.publicUrl;
+                localStorage.setItem('user', JSON.stringify(store.user));
+                renderProfileData();
+                showToast("Avatar atualizado!");
+            } catch(e) { showToast("Erro no upload da imagem.", "error"); }
+        };
+
+        // UPLOAD NO REPOSITÓRIO DIGITAL (ADMIN)
+        const pdfFileInput = document.getElementById('pdf-file-input');
+        if(pdfFileInput) {
+            pdfFileInput.onchange = (e) => {
+                const f = e.target.files[0];
+                if(f) {
+                    document.getElementById('pdf-selected-name').innerText = f.name;
+                    document.getElementById('pdf-placeholder').classList.add('hidden');
+                    document.getElementById('pdf-selected-name').classList.remove('hidden');
+                }
+            };
+        }
+
+        document.getElementById('form-repository').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-repo');
+            const file = pdfFileInput.files[0];
+            const fd = new FormData(e.target);
+            if(!file) return showToast("Por favor, anexe um arquivo PDF.", "error");
+            
+            btn.innerText = "TRANSFERINDO..."; btn.disabled = true;
+            const name = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            try {
+                await _supabase.storage.from('repositorio').upload(name, file);
+                await _supabase.from('repositorio').insert([{ titulo: fd.get('titulo'), autor: fd.get('autor'), pdf_url: name }]);
+                e.target.reset(); 
+                document.getElementById('pdf-placeholder').classList.remove('hidden');
+                document.getElementById('pdf-selected-name').classList.add('hidden');
+                refreshAllData(); showToast("Artigo catalogado no repositório digital!");
+            } catch(err) { showToast("Falha ao salvar arquivo digital.", "error"); }
+            finally { btn.innerText = "UPLOAD PARA O REPOSITÓRIO"; btn.disabled = false; }
+        };
+
+        // STARTUP
+        window.onload = () => {
+            const saved = localStorage.getItem('user');
+            if (saved) { try { store.user = JSON.parse(saved); initApp(); } catch(e) { localStorage.removeItem('user'); } }
+        };
+
+        function logout() { localStorage.removeItem('user'); location.reload(); }
+    </script>
+</body>
+</html>
