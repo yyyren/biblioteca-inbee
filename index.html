@@ -585,7 +585,7 @@ document.getElementById('form-add-book').onsubmit = async (e) => {
     btn.disabled = true;
 
     try {
-        // 1. Upload da imagem para o bucket 'capas'
+        // 1. Upload da imagem
         const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
 
         const { error: uploadError } = await _supabase
