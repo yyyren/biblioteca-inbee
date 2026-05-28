@@ -585,23 +585,36 @@ document.getElementById('form-add-book').onsubmit = async (e) => {
     btn.disabled = true;
 
     try {
+        // 1. Upload da imagem para o bucket 'capas'
         const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
 
-        const { error } = await _supabase.storage.from('capas').upload(fileName, file);
-        if (error) throw error;
+        const { error: uploadError } = await _supabase
+            .storage
+            .from('capas')
+            .upload(fileName, file);
 
-        const { data: { publicUrl } } =
-            _supabase.storage.from('capas').getPublicUrl(fileName);
+        if (uploadError) throw uploadError;
 
+        // 2. URL pública
+        const { data: { publicUrl } } = _supabase
+            .storage
+            .from('capas')
+            .getPublicUrl(fileName);
+
+        // 3. Inserir livro no banco
         const formData = new FormData(e.target);
 
-        await _supabase.from('livros').insert([{
-            titulo: formData.get('titulo'),
-            autor: formData.get('autor'),
-            categoria: formData.get('categoria'),
-            quantidade: parseInt(formData.get('quantidade')),
-            capa_url: publicUrl
-        }]);
+        const { error: insertError } = await _supabase
+            .from('livros')
+            .insert([{
+                titulo: formData.get('titulo'),
+                autor: formData.get('autor'),
+                categoria: formData.get('categoria'),
+                quantidade: parseInt(formData.get('quantidade')),
+                capa_url: publicUrl
+            }]);
+
+        if (insertError) throw insertError;
 
         showToast("Livro cadastrado com sucesso!");
         e.target.reset();
@@ -609,6 +622,8 @@ document.getElementById('form-add-book').onsubmit = async (e) => {
 
     } catch (err) {
         showToast("Erro ao salvar: " + err.message, "error");
+        console.error(err);
+
     } finally {
         btn.innerText = "SALVAR NO ACERVO";
         btn.disabled = false;
