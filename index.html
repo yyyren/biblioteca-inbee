@@ -585,7 +585,6 @@ document.getElementById('form-add-book').onsubmit = async (e) => {
     btn.disabled = true;
 
     try {
-        // 1. Upload da imagem
         const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
 
         const { error: uploadError } = await _supabase
@@ -595,13 +594,11 @@ document.getElementById('form-add-book').onsubmit = async (e) => {
 
         if (uploadError) throw uploadError;
 
-        // 2. URL pública
         const { data: { publicUrl } } = _supabase
             .storage
             .from('capas')
             .getPublicUrl(fileName);
 
-        // 3. Inserir livro no banco
         const formData = new FormData(e.target);
 
         const { error: insertError } = await _supabase
