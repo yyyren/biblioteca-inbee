@@ -264,7 +264,7 @@
                                 <option value="NEGOCIOS">NEGOCIOS</option>
                             </select>
                             <input type="number" name="quantidade" placeholder="Qtd Exemplares" required min="1" class="rounded-xl border-gray-200 text-sm p-4">
-                            <input type="text" name="capa_url" placeholder="URL da Imagem da Capa (Opcional)" class="md:col-span-3 rounded-xl border-gray-200 text-sm p-4">
+                            <input <input type="file" id="capa-file-input" accept="image/*" class="md:col-span-3 rounded-xl border-gray-200 text-sm p-4 bg-white">
                             <button type="submit" class="bg-[#001736] text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#C62828] transition-all p-4">Salvar no Acervo</button>
                         </form>
                     </div>
@@ -572,17 +572,46 @@
         }
 
         // INSERIR LIVROS NO ACERVO (ADMIN)
-        document.getElementById('form-add-book').onsubmit = async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const bookData = {
-                titulo: fd.get('titulo'),
-                autor: fd.get('autor'),
-                categoria: fd.get('categoria'),
-                quantidade: parseInt(fd.get('quantidade')),
-                capa_url: fd.get('capa_url') || null
-            };
+document.getElementById('form-add-book').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    const fileInput = document.getElementById('capa-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) return showToast("Selecione uma imagem para a capa!", "error");
 
+    btn.innerText = "ENVIANDO IMAGEM..."; 
+    btn.disabled = true;
+
+    try {
+        // 1. Upload da imagem para o bucket 'capas'
+        const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+        const { error: uploadError } = await _supabase.storage.from('capas').upload(fileName, file);
+        if (uploadError) throw uploadError;
+
+        // 2. Pegar a URL pública dessa imagem
+        const { data: { publicUrl } } = _supabase.storage.from('capas').getPublicUrl(fileName);
+
+        // 3. Salvar o livro com a URL gerada
+        const formData = new FormData(e.target);
+        await _supabase.from('livros').insert([{
+            titulo: formData.get('titulo'),
+            autor: formData.get('autor'),
+            categoria: formData.get('categoria'),
+            quantidade: parseInt(formData.get('quantidade')),
+            capa_url: publicUrl
+        }]);
+
+        showToast("Livro cadastrado com sucesso!");
+        e.target.reset();
+        refreshAllData();
+    } catch (err) {
+        showToast("Erro ao salvar: " + err.message, "error");
+    } finally {
+        btn.innerText = "SALVAR NO ACERVO"; 
+        btn.disabled = false;
+    }
+};
             try {
                 await _supabase.from('livros').insert([bookData]);
                 showToast("Nova obra catalogada com sucesso!");
